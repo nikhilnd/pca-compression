@@ -161,3 +161,14 @@ def parse_h5ad(anndf, cluster_label_obs):
     cluster_labels = np.array([x[0] for x in combined])
 
     return data, cluster_sizes, cluster_labels
+
+def var(X, power=2):
+    x1 = sorted(X)
+    x1 = x1[:len(X)//4] + x1[-len(X)//4:] 
+    X = x1
+    sum = 0
+    avg = np.mean(X)
+    for i in range(len(X)): 
+        sum += abs(X[i] - avg)
+    sum /= len(X)
+    return sum
