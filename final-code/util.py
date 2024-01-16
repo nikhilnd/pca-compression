@@ -189,7 +189,7 @@ def kmeans_nmi_ari(data, n_clusters, labels):
     :param n_clusters: number of clusters
     :param labels: cluster labels
     """
-    kmeans = KMeans(n_clusters=n_clusters, n_init='auto').fit(data)
+    kmeans = KMeans(n_clusters=n_clusters, n_init=10).fit(data)
     return adjusted_rand_score(labels, kmeans.labels_), adjusted_mutual_info_score(labels, kmeans.labels_)
 
 def pca_kmeans(data, n_clusters, labels, pca_dim): 
@@ -202,10 +202,19 @@ def pca_kmeans(data, n_clusters, labels, pca_dim):
     """
 
     data_pca = PCA(n_components=pca_dim, random_state=1).fit_transform(data)
-    # Perform kmeans clustering on PCA'd data; repeat 5 times and take median
+    # Perform kmeans clustering on PCA'd data; repeat 5 times and take max
     arr = Parallel(n_jobs=5)(delayed(kmeans_nmi_ari)(data_pca, n_clusters, labels) for i in range(5))
-    ari = np.median([x[0] for x in arr])
-    nmi = np.median([x[1] for x in arr])
+    # ari = np.median([x[0] for x in arr])
+    # nmi = np.median([x[1] for x in arr])
+
+    # ari = np.quantile([x[0] for x in arr], 0.75)
+    # nmi = np.quantile([x[1] for x in arr], 0.75)
+    
+    ari = np.max([x[0] for x in arr])
+    nmi = np.max([x[1] for x in arr])
+
+    # ari, nmi = kmeans_nmi_ari(data_pca, n_clusters, labels)
+
     return ari, nmi
 
 def mad(X):
@@ -253,23 +262,25 @@ def remove_pca_kmeans(data, cluster_sizes, labels, pca_dim, removal_rate=0.2, re
             C, _, __ = get_compressibility(data, cluster_sizes, pca_dim, reduce_dim=reduce_dim)
         combined = variance_list(C)
 
-    # print(data)
-    # print(combined)
     num_to_remove = int(removal_rate * sum(cluster_sizes))
     mask = np.ones(len(data), dtype=bool)
     mask[[combined[i][1] for i in range(num_to_remove)]] = False
     data_removed = data[mask, :]
     labels_removed = labels[mask]
 
-    # data_removed = np.delete(data, [combined[i][1] for i in range(num_to_remove)], axis=0)
-    # labels_removed = np.delete(labels, [combined[i][1] for i in range(num_to_remove)], axis=0)
-    # print(data_removed)
-
     data_removed_pca = PCA(n_components=pca_dim, random_state=1).fit_transform(data_removed)
     arr = Parallel(n_jobs=5)(delayed(kmeans_nmi_ari)(data_removed_pca, n_clusters, labels_removed) for i in range(5))
-    # print(arr)
-    ari_removed = np.median([x[0] for x in arr])
-    nmi_removed = np.median([x[1] for x in arr])
+    # ari_removed = np.median([x[0] for x in arr])
+    # nmi_removed = np.median([x[1] for x in arr])
+    
+    # ari_removed = np.quantile([x[0] for x in arr], 0.75)
+    # nmi_removed = np.quantile([x[1] for x in arr], 0.75)
+
+    ari_removed = np.max([x[0] for x in arr])
+    nmi_removed = np.max([x[1] for x in arr])
+
+    # ari_removed, nmi_removed = kmeans_nmi_ari(data_removed_pca, n_clusters, labels_removed)
+
     return ari_removed, nmi_removed
 
 def improvement_graph(datasets,improvement,title,metric="NMI"): 
@@ -279,9 +290,25 @@ def improvement_graph(datasets,improvement,title,metric="NMI"):
 
     fig, ax = plt.subplots(layout='constrained')
 
+    # min_val = float('inf')
+    # max_val = float('-inf')
+
     for attribute, measurement in improvement.items():
         offset = width * multiplier
-        rects = ax.bar(x + offset, measurement, width, label=attribute)
+
+        ax.bar(x + offset, measurement, width, label=attribute)
+
+        # med = [np.median(m) for m in measurement]
+        # q1 = [np.quantile(m, 0.25) for m in measurement]
+        # q3 = [np.quantile(m, 0.75) for m in measurement]
+
+        # min_val = min(min_val, min(q1))
+        # max_val = max(max_val, max(q3))
+
+        # yerr = [[med[i] - q1[i] for i in range(len(med))], [q3[i] - med[i] for i in range(len(med))]]
+        # ax.bar(x + offset, med, width, label=attribute)
+        # ax.errorbar(x + offset, med, yerr=yerr, fmt='none', ecolor='black', capsize=2)
+
         multiplier += 1
 
     # Add some text for labels, title and custom x-axis tick labels, etc.
@@ -291,7 +318,7 @@ def improvement_graph(datasets,improvement,title,metric="NMI"):
     ax.legend(loc='upper left', ncols=3)
     min_val = min([y for x in improvement.values() for y in x])
     max_val = max([y for x in improvement.values() for y in x])
-    ax.set_ylim(min(-0.005, min_val - 0.005), max(0.23, max_val + 0.005))
-    # ax.set_ylim(-0.005, 0.23)
+
+    ax.set_ylim(min(-0.005, min_val - 0.005), max(0.23, max_val + 0.05))
 
     plt.show()
